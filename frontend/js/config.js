@@ -3,7 +3,7 @@
 // desplegar el backend en Railway.
 
 (function () {
-  const PROD_API_URL = "https://TU-BACKEND.up.railway.app";
+  const PROD_API_URL = "https://dashboard-table.onrender.com";
 
   const isLocal = ["localhost", "127.0.0.1"].includes(location.hostname);
 

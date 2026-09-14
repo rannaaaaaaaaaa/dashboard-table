@@ -28,10 +28,10 @@ app.use(express.json({ limit: "1mb" }));
 app.use(
   cookieSession({
     name: "ranaris_session",
-    secret: SESSION_SECRET,
+    keys: [SESSION_SECRET],
     maxAge: 30 * 24 * 60 * 60 * 1000,
-    sameSite: isProd ? "none" : "lax",
-    secure: isProd,
+    sameSite: "none",
+    secure: true,
     httpOnly: true,
   })
 );

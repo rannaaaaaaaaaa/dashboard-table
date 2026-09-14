@@ -1,0 +1,21 @@
+# --- secretos ---
+.env
+.env.*
+!*.env.example
+
+# --- Node (backend) ---
+node_modules/
+backend/data/*.sqlite3
+backend/data/*.sqlite3-*
+npm-debug.log*
+
+# --- Python (bot) ---
+__pycache__/
+*.pyc
+venv/
+.venv/
+bot/data/*.sqlite3
+
+# --- misc ---
+.DS_Store
+*.log

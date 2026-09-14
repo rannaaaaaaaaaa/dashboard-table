@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranaris Embeds</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="index.html">🐸 Ranaris Embeds</a>
+        <div class="user-chip" id="userChip"></div>
+    </header>
+    <main class="content" id="content">
+        <p class="muted">Cargando...</p>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/common.js"></script>
+    <script>
+        (async function () {
+            const API_BASE = window.APP_CONFIG.API_BASE_URL;
+            const data = await initHeader({ requireAuth: false });
+            const content = document.getElementById("content");
+
+            if (!data || !data.user) {
+                content.innerHTML = `
+                    <div class="login-screen">
+                        <h1>🐸 Ranaris Embeds</h1>
+                        <p>Panel para armar y mandar embeds (Components V2) al servidor de Discord donde esté Tableware_bot.</p>
+                        <a class="btn btn-primary btn-lg" href="${API_BASE}/auth/login">Iniciar sesión con Discord</a>
+                    </div>`;
+                return;
+            }
+
+            const servidores = data.servidores || [];
+            content.innerHTML = `
+                <h1>Tus servidores</h1>
+                <p class="muted">Solo se muestran servidores donde tenés permiso de Administrador.</p>
+                <div class="grid-servidores">
+                    ${servidores.length === 0
+                        ? `<p>No sos administrador en ningún servidor con tu cuenta de Discord.</p>`
+                        : servidores.map((s) => `
+                            <div class="card-servidor ${s.bot_presente ? "" : "disabled"}">
+                                <div class="card-servidor-nombre">${escapeHtml(s.name)}</div>
+                                ${s.bot_presente
+                                    ? `<a class="btn btn-primary" href="guild.html?guild=${s.id}">Entrar</a>`
+                                    : `<span class="badge">El bot no está acá</span>`
+                                }
+                            </div>`).join("")
+                    }
+                </div>`;
+        })();
+    </script>
+</body>
+</html>

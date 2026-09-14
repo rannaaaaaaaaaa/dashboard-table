@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor de embed — Ranaris Embeds</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="index.html">🐸 Ranaris Embeds</a>
+        <div class="user-chip" id="userChip"></div>
+    </header>
+    <main class="content">
+        <div class="builder-topbar">
+            <a class="back-link btn btn-ghost" id="backLink" href="#">←</a>
+            <input type="text" id="nombreGrupo" placeholder="Nombre interno del embed (solo para vos)">
+            <div class="builder-topbar-spacer"></div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted)">
+                Color del borde
+                <input type="color" id="colorAccent" value="#5865f2">
+            </label>
+            <button class="btn btn-ghost" id="btnGuardar">💾 Guardar</button>
+            <button class="btn btn-primary" id="btnEnviar">📤 Guardar y enviar</button>
+        </div>
+
+        <div class="builder-layout">
+            <div class="panel">
+                <h3>Bloques</h3>
+                <div class="paleta-item" draggable="true" data-tipo="text"><span class="emoji">📝</span> Texto</div>
+                <div class="paleta-item" draggable="true" data-tipo="image"><span class="emoji">🖼️</span> Imagen</div>
+                <div class="paleta-item" draggable="true" data-tipo="separator"><span class="emoji">➖</span> Separador</div>
+                <div class="paleta-item" draggable="true" data-tipo="buttons"><span class="emoji">🔘</span> Botón</div>
+                <div class="paleta-item" draggable="true" data-tipo="menu"><span class="emoji">📋</span> Menú</div>
+                <p class="muted" style="font-size:12px;margin-top:14px">Arrastrá un bloque al panel del medio. Los bloques ya puestos también se pueden reordenar arrastrando.</p>
+            </div>
+
+            <div class="panel canvas-wrap">
+                <h3>Vista previa (así se va a ver en Discord)</h3>
+                <div class="canvas" id="canvas"></div>
+            </div>
+
+            <div class="panel" id="panelPropiedades">
+                <h3>Propiedades</h3>
+                <div class="propiedades-vacio">Seleccioná un bloque para editarlo.</div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="modalEnviar" style="display:none">
+            <div class="modal">
+                <h3>¿A qué canal lo mando?</h3>
+                <p class="muted" style="margin:0;font-size:13px">Solo se muestran canales del server donde el bot está presente.</p>
+                <div class="lista-canales" id="listaCanales"></div>
+                <div id="resultadosEnvio"></div>
+                <div class="modal-acciones">
+                    <button class="btn btn-ghost" id="btnCerrarModal">Cancelar</button>
+                    <button class="btn btn-primary" id="btnConfirmarEnvio">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/common.js"></script>
+    <script>
+        (async function () {
+            const API_BASE = window.APP_CONFIG.API_BASE_URL;
+            const guildId = qs("guild");
+            const grupoId = qs("grupo");
+            if (!guildId) { location.href = "index.html"; return; }
+
+            await initHeader({ requireAuth: true });
+            document.getElementById("backLink").href = `guild.html?guild=${guildId}`;
+
+            window.GUILD_ID = guildId;
+            window.GRUPO_INICIAL = null;
+
+            if (grupoId) {
+                const res = await fetch(`${API_BASE}/api/guild/${guildId}/grupos/${grupoId}`, { credentials: "include" });
+                if (res.ok) {
+                    window.GRUPO_INICIAL = await res.json();
+                } else {
+                    alert("Ese embed no existe en este servidor.");
+                    location.href = `guild.html?guild=${guildId}`;
+                    return;
+                }
+            }
+
+            const script = document.createElement("script");
+            script.src = "js/builder.js";
+            document.body.appendChild(script);
+        })();
+    </script>
+</body>
+</html>

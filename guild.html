@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servidor — Ranaris Embeds</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="index.html">🐸 Ranaris Embeds</a>
+        <div class="user-chip" id="userChip"></div>
+    </header>
+    <main class="content" id="content">
+        <p class="muted">Cargando...</p>
+    </main>
+
+    <script src="js/config.js"></script>
+    <script src="js/common.js"></script>
+    <script>
+        (async function () {
+            const API_BASE = window.APP_CONFIG.API_BASE_URL;
+            const guildId = qs("guild");
+            const content = document.getElementById("content");
+            if (!guildId) { location.href = "index.html"; return; }
+
+            await initHeader({ requireAuth: true });
+
+            const res = await fetch(`${API_BASE}/api/guild/${guildId}`, { credentials: "include" });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                content.innerHTML = `<div class="login-screen"><h1>⚠️ Algo salió mal</h1><p>${escapeHtml(err.error || "No se pudo cargar el servidor.")}</p><a class="btn btn-primary" href="index.html">Volver</a></div>`;
+                return;
+            }
+            const data = await res.json();
+
+            content.innerHTML = `
+                <div class="guild-header">
+                    <div>
+                        <a class="back-link" href="index.html">← Mis servidores</a>
+                        <h1>${escapeHtml(data.guild_name)}</h1>
+                    </div>
+                    <a class="btn btn-primary" href="builder.html?guild=${guildId}">+ Nuevo embed</a>
+                </div>
+                <div class="lista-grupos">
+                    ${data.grupos.length === 0
+                        ? `<p class="muted">Todavía no armaste ningún embed acá. Creá el primero.</p>`
+                        : data.grupos.map((g) => `
+                            <div class="fila-grupo">
+                                <div>
+                                    <div class="fila-grupo-nombre">${escapeHtml(g.nombre)}</div>
+                                    <div class="fila-grupo-meta">#${g.id}</div>
+                                </div>
+                                <div class="fila-grupo-acciones">
+                                    <a class="btn btn-ghost" href="builder.html?guild=${guildId}&grupo=${g.id}">Editar</a>
+                                </div>
+                            </div>`).join("")
+                    }
+                </div>`;
+        })();
+    </script>
+</body>
+</html>

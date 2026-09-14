@@ -1,8 +1,23 @@
 const BACKEND_URL = "https://dashboard-table.onrender.com";
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
+
+    // Archivos del frontend: los sirve Cloudflare normalmente.
+    // Las rutas de backend se envían a Render.
+    const backendPaths = [
+      "/auth/",
+      "/api/",
+    ];
+
+    const isBackendRequest = backendPaths.some((path) =>
+      url.pathname.startsWith(path)
+    );
+
+    if (!isBackendRequest) {
+      return env.ASSETS.fetch(request);
+    }
 
     const backendUrl = new URL(
       url.pathname + url.search,
@@ -10,8 +25,6 @@ export default {
     );
 
     const headers = new Headers(request.headers);
-
-    // El backend debe ver el dominio real de Render.
     headers.delete("Host");
 
     const backendRequest = new Request(backendUrl, {
@@ -24,14 +37,8 @@ export default {
     });
 
     const response = await fetch(backendRequest);
-
     const responseHeaders = new Headers(response.headers);
 
-    /*
-     * El backend crea la cookie para onrender.com.
-     * La reescribimos para que el navegador la guarde
-     * para el dominio del Worker.
-     */
     const setCookie = responseHeaders.get("Set-Cookie");
 
     if (setCookie) {

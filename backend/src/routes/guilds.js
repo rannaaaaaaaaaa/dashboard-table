@@ -143,6 +143,21 @@ router.post("/api/guild/:guildId/grupos/:grupoId/enviar", async (req, res, next)
         }
       } catch (e) {
         if (e instanceof dc.DiscordAPIError) {
+          // code 10008 = "Unknown Message": alguien borró el mensaje a mano en
+          // Discord, pero acá todavía teníamos guardado su ID. En vez de
+          // fallar, mandamos uno nuevo y actualizamos la referencia.
+          const mensajeBorrado = e.statusCode === 404 && /"code"\s*:\s*10008/.test(e.body || "");
+          if (mensajeBorrado) {
+            try {
+              const nuevo = await dc.sendMessage(cid, payload);
+              db.registrarMensajeEnviado(grupoId, cid, nuevo.id);
+              resultados.push({ channel_id: cid, ok: true, accion: "reenviado (el mensaje anterior ya no existía)" });
+              continue;
+            } catch (e2) {
+              resultados.push({ channel_id: cid, ok: false, error: e2.message });
+              continue;
+            }
+          }
           resultados.push({ channel_id: cid, ok: false, error: e.message });
         } else {
           throw e;

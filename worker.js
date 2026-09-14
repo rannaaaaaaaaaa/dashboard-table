@@ -39,19 +39,27 @@ export default {
     const response = await fetch(backendRequest);
     const responseHeaders = new Headers(response.headers);
 
-    const setCookie = responseHeaders.get("Set-Cookie");
+    // cookie-session manda DOS cabeceras Set-Cookie (el valor y su firma
+    // ".sig"). responseHeaders.get("Set-Cookie") solo devuelve una: hay que
+    // usar getSetCookie() para no perder ninguna, o la sesión queda
+    // incompleta en el navegador aunque el fetch "funcione".
+    const setCookies = typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [];
 
-    if (setCookie) {
+    if (setCookies.length > 0) {
       responseHeaders.delete("Set-Cookie");
 
-      responseHeaders.append(
-        "Set-Cookie",
-        setCookie
-          .replace(/;\s*Domain=[^;]*/gi, "")
-          .replace(/;\s*SameSite=[^;]*/gi, "")
-          .replace(/;\s*Secure/gi, "")
-          + "; Path=/; SameSite=Lax; Secure"
-      );
+      for (const setCookie of setCookies) {
+        responseHeaders.append(
+          "Set-Cookie",
+          setCookie
+            .replace(/;\s*Domain=[^;]*/gi, "")
+            .replace(/;\s*SameSite=[^;]*/gi, "")
+            .replace(/;\s*Secure/gi, "")
+            + "; Path=/; SameSite=Lax; Secure"
+        );
+      }
     }
 
     return new Response(response.body, {

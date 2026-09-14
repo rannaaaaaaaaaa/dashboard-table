@@ -3,8 +3,19 @@
 
 async function initHeader({ requireAuth = true } = {}) {
   const API_BASE = window.APP_CONFIG.API_BASE_URL;
-  const res = await fetch(`${API_BASE}/api/session`, { credentials: "include" });
-  const data = await res.json();
+
+  let data;
+  try {
+    const res = await fetch(`${API_BASE}/api/session`, { credentials: "include" });
+    data = await res.json();
+  } catch (err) {
+    console.error("No se pudo consultar /api/session:", err);
+    const content = document.getElementById("content");
+    if (content) {
+      content.innerHTML = `<p class="muted">No se pudo conectar con el servidor. Probá recargar la página.</p>`;
+    }
+    return null;
+  }
 
   const userChip = document.getElementById("userChip");
   if (data.user && userChip) {

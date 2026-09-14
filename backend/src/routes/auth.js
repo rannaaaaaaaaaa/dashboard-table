@@ -34,7 +34,8 @@ router.get("/auth/callback", async (req, res, next) => {
       adminGuilds.map((g) => [g.id, { name: g.name, icon: g.icon }])
     );
     req.session.oauth_state = null;
-
+    console.log("SESSION SIZE:", JSON.stringify(req.session).length);
+    console.log("ADMIN GUILDS:", Object.keys(req.session.admin_guilds || {}).length);
     res.redirect(FRONTEND_HOME_URL);
   } catch (e) {
     next(e);

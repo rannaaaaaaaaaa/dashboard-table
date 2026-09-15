@@ -1,7 +1,7 @@
 const express = require("express");
 const dc = require("../discordApi");
 const db = require("../db");
-const { buildMessagePayload, BuilderError } = require("../components");
+const { buildMessagePayload, buildCombinedPayload, BuilderError } = require("../components");
 const { loginRequired, guildAdminRequired } = require("../middleware/auth");
 
 const router = express.Router();
@@ -119,6 +119,61 @@ router.get("/api/guild/:guildId/grupos/:grupoId/preview", async (req, res, next)
     res.json(payload);
   } catch (e) {
     if (e instanceof BuilderError) return res.status(400).json({ error: e.message });
+    next(e);
+  }
+});
+
+router.post("/api/guild/:guildId/grupos/enviar-multiple", async (req, res, next) => {
+  try {
+    const { guildId } = req.params;
+    const body = req.body || {};
+    const grupoIds = [...new Set((body.grupo_ids || []).map(String))];
+    const canalIds = (body.canal_ids || []).map(String);
+
+    if (grupoIds.length < 2) {
+      return res.status(400).json({ error: "Elegí al menos 2 embeds para combinar." });
+    }
+    if (!canalIds.length) {
+      return res.status(400).json({ error: "Elegí al menos un canal." });
+    }
+
+    const filas = [];
+    for (const gid of grupoIds) {
+      const row = await db.getGrupo(gid, guildId);
+      if (!row) return res.status(404).json({ error: `No existe el embed #${gid}.` });
+      filas.push(row);
+    }
+
+    const canalesValidos = new Set((await dc.getGuildChannels(guildId)).map((c) => c.id));
+    for (const cid of canalIds) {
+      if (!canalesValidos.has(cid)) {
+        return res.status(400).json({ error: `El canal ${cid} no pertenece a este servidor.` });
+      }
+    }
+
+    let payload;
+    try {
+      payload = buildCombinedPayload(filas.map((f) => JSON.parse(f.payload)));
+    } catch (e) {
+      if (e instanceof BuilderError) return res.status(400).json({ error: e.message });
+      throw e;
+    }
+
+    const resultados = [];
+    for (const cid of canalIds) {
+      try {
+        const nuevo = await dc.sendMessage(cid, payload);
+        resultados.push({ channel_id: cid, ok: true, message_id: nuevo.id });
+      } catch (e) {
+        if (e instanceof dc.DiscordAPIError) {
+          resultados.push({ channel_id: cid, ok: false, error: e.message });
+        } else {
+          throw e;
+        }
+      }
+    }
+    res.json({ resultados });
+  } catch (e) {
     next(e);
   }
 });

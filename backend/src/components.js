@@ -13,6 +13,10 @@
 
 const IS_COMPONENTS_V2 = 1 << 15;
 
+// Límites duros que impone Discord para mensajes con Components V2.
+const MAX_COMPONENTES_MENSAJE = 40;
+const MAX_CARACTERES_MENSAJE = 4000;
+
 const BUTTON_STYLES = {
   primary: 1,
   secondary: 2,
@@ -175,8 +179,11 @@ function blockToComponents(block) {
 }
 
 /** payload = {accent_color: number|null, blocks: [...], title, description,
- * thumbnail_url, footer_text} */
-function buildMessagePayload(payload) {
+ * thumbnail_url, footer_text} -> UN Container (type 17) listo para meter
+ * en el array "components" de un mensaje. No valida límites globales del
+ * mensaje: eso lo hacen buildMessagePayload / buildCombinedPayload, que
+ * son quienes saben cuántos containers va a haber en total. */
+function payloadToContainer(payload) {
   const blocks = payload.blocks || [];
   const header = headerComponents(payload);
   const footer = footerComponents(payload);
@@ -194,11 +201,78 @@ function buildMessagePayload(payload) {
   if (accent !== undefined && accent !== null) {
     container.accent_color = parseInt(accent, 10);
   }
+  return container;
+}
 
+/** Cuenta un componente y todo lo que cuelga de él (components anidados +
+ * accessory), tal como Discord los cuenta para el límite de 40 por mensaje.
+ * Los "items" de un Media Gallery NO cuentan como componentes aparte. */
+function contarComponentes(nodo) {
+  let total = 1;
+  if (Array.isArray(nodo.components)) {
+    for (const hijo of nodo.components) total += contarComponentes(hijo);
+  }
+  if (nodo.accessory) total += contarComponentes(nodo.accessory);
+  return total;
+}
+
+/** Suma los caracteres de todos los Text Display (type 10) anidados en un
+ * componente, para chequear el límite global de 4000 caracteres. */
+function contarCaracteresTexto(nodo) {
+  let total = nodo.type === 10 ? (nodo.content || "").length : 0;
+  if (Array.isArray(nodo.components)) {
+    for (const hijo of nodo.components) total += contarCaracteresTexto(hijo);
+  }
+  if (nodo.accessory) total += contarCaracteresTexto(nodo.accessory);
+  return total;
+}
+
+/** payload -> mensaje completo de UN solo embed (comportamiento original). */
+function buildMessagePayload(payload) {
+  const container = payloadToContainer(payload);
   return {
     flags: IS_COMPONENTS_V2,
     components: [container],
   };
 }
 
-module.exports = { BuilderError, buildMessagePayload };
+/** payloads (array de payloads de distintos grupos) -> UN mensaje con
+ * varios containers, uno por cada embed, respetando los límites duros de
+ * Discord para Components V2 (40 componentes / 4000 caracteres totales). */
+function buildCombinedPayload(payloads) {
+  if (!payloads || !payloads.length) {
+    throw new BuilderError("Elegí al menos un embed para combinar.");
+  }
+
+  const containers = payloads.map((p) => payloadToContainer(p));
+
+  const totalComponentes = containers.reduce((acc, c) => acc + contarComponentes(c), 0);
+  if (totalComponentes > MAX_COMPONENTES_MENSAJE) {
+    throw new BuilderError(
+      `Esta combinación usa ${totalComponentes} componentes y Discord permite ` +
+      `${MAX_COMPONENTES_MENSAJE} por mensaje. Sacá algún embed o simplificalo (menos ` +
+      `botones, imágenes o bloques de texto) e intentá de nuevo.`
+    );
+  }
+
+  const totalCaracteres = containers.reduce((acc, c) => acc + contarCaracteresTexto(c), 0);
+  if (totalCaracteres > MAX_CARACTERES_MENSAJE) {
+    throw new BuilderError(
+      `El texto combinado tiene ${totalCaracteres} caracteres y Discord permite ` +
+      `${MAX_CARACTERES_MENSAJE} por mensaje. Achicá algún texto e intentá de nuevo.`
+    );
+  }
+
+  return {
+    flags: IS_COMPONENTS_V2,
+    components: containers,
+  };
+}
+
+module.exports = {
+  BuilderError,
+  buildMessagePayload,
+  buildCombinedPayload,
+  MAX_COMPONENTES_MENSAJE,
+  MAX_CARACTERES_MENSAJE,
+};

@@ -15,6 +15,30 @@
         <p class="muted">Cargando...</p>
     </main>
 
+    <div class="barra-combo" id="barraCombo" style="display:none">
+        <span id="comboContador"></span>
+        <div class="barra-combo-acciones">
+            <button class="btn btn-ghost" id="btnCancelarCombo">Cancelar selección</button>
+            <button class="btn btn-primary" id="btnAbrirCombo">Enviar juntos</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalCombo" style="display:none">
+        <div class="modal">
+            <h3>Enviar embeds combinados</h3>
+            <p class="muted" style="margin:0;font-size:13px">
+                Se van a mandar como UN solo mensaje, uno abajo del otro, en el mismo orden en que los elegiste.
+                Discord permite hasta 40 componentes y 4000 caracteres por mensaje: si te pasás, te avisamos acá.
+            </p>
+            <div class="lista-canales" id="listaCanalesCombo"></div>
+            <div id="resultadosEnvioCombo"></div>
+            <div class="modal-acciones">
+                <button class="btn btn-ghost" id="btnCerrarModalCombo">Cancelar</button>
+                <button class="btn btn-primary" id="btnConfirmarEnvioCombo">Enviar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/config.js"></script>
     <script src="js/common.js"></script>
     <script>
@@ -47,9 +71,14 @@
                         ? `<p class="muted">Todavía no armaste ningún embed acá. Creá el primero.</p>`
                         : data.grupos.map((g) => `
                             <div class="fila-grupo">
-                                <div>
-                                    <div class="fila-grupo-nombre">${escapeHtml(g.nombre)}</div>
-                                    <div class="fila-grupo-meta">#${g.id}</div>
+                                <div class="fila-grupo-izquierda">
+                                    <label class="fila-grupo-check">
+                                        <input type="checkbox" class="chk-grupo" value="${g.id}">
+                                    </label>
+                                    <div class="fila-grupo-info">
+                                        <div class="fila-grupo-nombre">${escapeHtml(g.nombre)}</div>
+                                        <div class="fila-grupo-meta">#${g.id}</div>
+                                    </div>
                                 </div>
                                 <div class="fila-grupo-acciones">
                                     <a class="btn btn-ghost" href="builder.html?guild=${guildId}&grupo=${g.id}">Editar</a>
@@ -57,6 +86,101 @@
                             </div>`).join("")
                     }
                 </div>`;
+
+            // ------------------------------------------------------------
+            // Selección múltiple + envío combinado
+            // ------------------------------------------------------------
+            const barraCombo = document.getElementById("barraCombo");
+            const comboContador = document.getElementById("comboContador");
+            const modalCombo = document.getElementById("modalCombo");
+            const listaCanalesCombo = document.getElementById("listaCanalesCombo");
+            const resultadosEnvioCombo = document.getElementById("resultadosEnvioCombo");
+            const btnCancelarCombo = document.getElementById("btnCancelarCombo");
+            const btnAbrirCombo = document.getElementById("btnAbrirCombo");
+            const btnCerrarModalCombo = document.getElementById("btnCerrarModalCombo");
+            const btnConfirmarEnvioCombo = document.getElementById("btnConfirmarEnvioCombo");
+
+            const seleccionados = new Set();
+            let canalesCache = null;
+            const canalesSeleccionadosCombo = new Set();
+
+            function actualizarBarra() {
+                if (seleccionados.size >= 2) {
+                    barraCombo.style.display = "flex";
+                    comboContador.textContent = `${seleccionados.size} embeds seleccionados`;
+                } else {
+                    barraCombo.style.display = "none";
+                }
+            }
+
+            content.querySelectorAll(".chk-grupo").forEach((chk) => {
+                chk.addEventListener("change", () => {
+                    if (chk.checked) seleccionados.add(chk.value);
+                    else seleccionados.delete(chk.value);
+                    actualizarBarra();
+                });
+            });
+
+            btnCancelarCombo.addEventListener("click", () => {
+                seleccionados.clear();
+                content.querySelectorAll(".chk-grupo").forEach((chk) => (chk.checked = false));
+                actualizarBarra();
+            });
+
+            btnAbrirCombo.addEventListener("click", async () => {
+                resultadosEnvioCombo.innerHTML = "";
+                modalCombo.style.display = "flex";
+                if (!canalesCache) {
+                    listaCanalesCombo.innerHTML = `<p class="muted">Cargando canales...</p>`;
+                    const r = await fetch(`${API_BASE}/api/guild/${guildId}/canales`, { credentials: "include" });
+                    canalesCache = await r.json();
+                }
+                listaCanalesCombo.innerHTML = canalesCache
+                    .map((c) => `
+                        <label class="canal-check">
+                            <input type="checkbox" value="${c.id}" ${canalesSeleccionadosCombo.has(c.id) ? "checked" : ""}>
+                            #${escapeHtml(c.name)}
+                        </label>`).join("");
+                listaCanalesCombo.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+                    cb.addEventListener("change", () => {
+                        if (cb.checked) canalesSeleccionadosCombo.add(cb.value);
+                        else canalesSeleccionadosCombo.delete(cb.value);
+                    });
+                });
+            });
+
+            btnCerrarModalCombo.addEventListener("click", () => (modalCombo.style.display = "none"));
+
+            btnConfirmarEnvioCombo.addEventListener("click", async () => {
+                const canalIds = [...canalesSeleccionadosCombo];
+                if (!canalIds.length) {
+                    resultadosEnvioCombo.innerHTML = `<div class="resultado-envio error">Elegí al menos un canal.</div>`;
+                    return;
+                }
+                resultadosEnvioCombo.innerHTML = `<p class="muted">Enviando...</p>`;
+                try {
+                    const r = await fetch(`${API_BASE}/api/guild/${guildId}/grupos/enviar-multiple`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ grupo_ids: [...seleccionados], canal_ids: canalIds }),
+                    });
+                    const respuesta = await r.json();
+                    if (!r.ok) {
+                        resultadosEnvioCombo.innerHTML = `<div class="resultado-envio error">${escapeHtml(respuesta.error || "Error al enviar.")}</div>`;
+                        return;
+                    }
+                    resultadosEnvioCombo.innerHTML = respuesta.resultados.map((res) => {
+                        const canal = (canalesCache || []).find((c) => c.id === res.channel_id);
+                        const nombre = canal ? canal.name : res.channel_id;
+                        return res.ok
+                            ? `<div class="resultado-envio ok">✅ #${escapeHtml(nombre)}: enviado</div>`
+                            : `<div class="resultado-envio error">❌ #${escapeHtml(nombre)}: ${escapeHtml(res.error)}</div>`;
+                    }).join("");
+                } catch (e) {
+                    resultadosEnvioCombo.innerHTML = `<div class="resultado-envio error">Error de red al enviar.</div>`;
+                }
+            });
         })();
     </script>
 </body>
